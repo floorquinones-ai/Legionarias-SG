@@ -7,6 +7,43 @@
 <script src="https://cdnjs.cloudflare.com/ajax/libs/react/18.2.0/umd/react.production.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/react-dom/18.2.0/umd/react-dom.production.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/babel-standalone/7.23.2/babel.min.js"></script>
+<script type="module">
+  import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
+  import { getFirestore, doc, onSnapshot, setDoc } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
+
+  const firebaseConfig = {
+    apiKey: "AIzaSyCex3VDJlBxXJp108NUSwf7w-Thh20jCDk",
+    authDomain: "legionarias-arg-sg.firebaseapp.com",
+    projectId: "legionarias-arg-sg",
+    storageBucket: "legionarias-arg-sg.firebasestorage.app",
+    messagingSenderId: "234231504038",
+    appId: "1:234231504038:web:f9169f1bd6275e9eb1a867"
+  };
+
+  const app = initializeApp(firebaseConfig);
+  const db = getFirestore(app);
+  const docRef = doc(db, "negocio", "data");
+
+  window.__fbReady = false;
+  window.__fbData = null;
+  window.__fbListeners = [];
+
+  onSnapshot(docRef, (snap) => {
+    const d = snap.exists() ? snap.data() : null;
+    window.__fbData = d;
+    window.__fbReady = true;
+    window.__fbListeners.forEach(fn => fn(d));
+  });
+
+  window.__fbSave = async (data) => {
+    await setDoc(docRef, data);
+  };
+
+  window.__fbSubscribe = (fn) => {
+    window.__fbListeners.push(fn);
+    if (window.__fbReady) fn(window.__fbData);
+  };
+</script>
 <style>
 *{box-sizing:border-box;margin:0;padding:0}
 body{font-family:system-ui,sans-serif;background:#FAF7F7}
@@ -22,7 +59,7 @@ a{color:#1A5FA8;text-decoration:none}
 <body>
 <div id="root"></div>
 <script type="text/babel">
-const {useState,useEffect} = React;
+const {useState, useEffect} = React;
 
 const C = {
   bordo:"#6B1F2A",bordoD:"#4A1219",bordoL:"#8B2535",bordoXL:"#F9EEF0",
@@ -34,11 +71,11 @@ const C = {
   info:"#1A5FA8",infoBg:"#E8F0FB",
 };
 
-const fmt = n => Number(n).toLocaleString("es-AR",{minimumFractionDigits:2,maximumFractionDigits:2});
+const fmt  = n => Number(n).toLocaleString("es-AR",{minimumFractionDigits:2,maximumFractionDigits:2});
 const fmtI = n => Number(n).toLocaleString("es-AR");
 const today = () => new Date().toISOString().split("T")[0];
 
-const inp = {padding:"9px 12px",borderRadius:8,border:`1px solid ${C.grayB}`,fontSize:14,outline:"none",background:C.white,color:"#111",width:"100%",boxSizing:"border-box",fontFamily:"inherit"};
+const inp  = {padding:"9px 12px",borderRadius:8,border:`1px solid ${C.grayB}`,fontSize:14,outline:"none",background:C.white,color:"#111",width:"100%",boxSizing:"border-box",fontFamily:"inherit"};
 const btnP = {padding:"9px 20px",borderRadius:8,border:"none",background:C.bordo,color:C.white,fontSize:14,fontWeight:500,cursor:"pointer",whiteSpace:"nowrap"};
 const btnS = {padding:"6px 14px",borderRadius:6,border:`1px solid ${C.grayB}`,background:C.white,color:"#444",fontSize:13,cursor:"pointer"};
 const btnD = {...btnS,color:C.danger,borderColor:"#FBCDD0"};
@@ -58,23 +95,45 @@ const DEFAULT_DATA = {
   }
 };
 
-function loadData(){try{const r=localStorage.getItem("biz_v5");return r?JSON.parse(r):DEFAULT_DATA;}catch{return DEFAULT_DATA;}}
-function saveData(d){try{localStorage.setItem("biz_v5",JSON.stringify(d));}catch{}}
+function App() {
+  const [tab,setTab]     = useState("Dashboard");
+  const [data,setData]   = useState(null);
+  const [saving,setSaving] = useState(false);
+  const [mini,setMini]   = useState(false);
 
-function App(){
-  const [tab,setTab]=useState("Dashboard");
-  const [data,setData]=useState(loadData);
-  const [mini,setMini]=useState(false);
+  useEffect(() => {
+    const unsub = window.__fbSubscribe((d) => {
+      if (d) {
+        if (!d.cats?.stock) d.cats = {...DEFAULT_DATA.cats,...d.cats,stock:d.cats?.stock||DEFAULT_DATA.cats.stock};
+        setData(d);
+      } else {
+        setData(DEFAULT_DATA);
+      }
+    });
+  }, []);
 
-  const save=next=>{setData(next);saveData(next);};
-
-  const exportCSV=()=>{
-    const rows=[["Tipo","Descripcion","Categoria","Bruto","Descuento","Neto","Fecha"],
-      ...data.transactions.map(t=>[t.type,t.desc||"",t.category,t.bruto||t.amount,t.descuento||0,t.amount,t.date])];
-    const a=document.createElement("a");
-    a.href=URL.createObjectURL(new Blob([rows.map(r=>r.join(",")).join("\n")],{type:"text/csv"}));
-    a.download="movimientos.csv";a.click();
+  const save = async (next) => {
+    setData(next);
+    setSaving(true);
+    try { await window.__fbSave(next); }
+    catch(e) { alert("Error al guardar: " + e.message); }
+    setSaving(false);
   };
+
+  const exportCSV = () => {
+    const rows = [["Tipo","Descripcion","Categoria","Bruto","Descuento","Neto","Fecha"],
+      ...data.transactions.map(t=>[t.type,t.desc||"",t.category,t.bruto||t.amount,t.descuento||0,t.amount,t.date])];
+    const a = document.createElement("a");
+    a.href = URL.createObjectURL(new Blob([rows.map(r=>r.join(",")).join("\n")],{type:"text/csv"}));
+    a.download = "movimientos.csv"; a.click();
+  };
+
+  if (!data) return (
+    <div style={{display:"flex",alignItems:"center",justifyContent:"center",height:"100vh",flexDirection:"column",gap:12,color:C.gray}}>
+      <div style={{fontSize:32}}>⟳</div>
+      <div style={{fontSize:15}}>Conectando con la base de datos...</div>
+    </div>
+  );
 
   return (
     <div style={{display:"flex",minHeight:"100vh",background:C.offwhite}}>
@@ -90,42 +149,28 @@ function App(){
           </button>
         ))}
         <div style={{flex:1}}/>
+        {saving&&!mini&&<div style={{margin:"0 10px 4px",fontSize:12,color:"rgba(255,255,255,.5)",textAlign:"center"}}>Guardando...</div>}
         {!mini&&<button onClick={exportCSV} style={{margin:"0 10px 14px",padding:"9px 10px",borderRadius:8,border:`1px solid ${C.bordoL}`,background:"transparent",color:"rgba(255,255,255,.75)",fontSize:13,cursor:"pointer"}}>↓ Exportar CSV</button>}
       </nav>
       <main style={{flex:1,padding:"1.25rem",overflowY:"auto"}}>
-        {tab==="Dashboard"&&<Dashboard data={data}/>}
-        {tab==="Stock"&&<Stock data={data} save={save}/>}
-        {tab==="Ventas"&&<Ventas data={data} save={save}/>}
-        {tab==="Movimientos"&&<Movs data={data} save={save}/>}
-        {tab==="Deudas"&&<Deudas data={data} save={save}/>}
-        {tab==="Gráficos"&&<Graficos data={data}/>}
-        {tab==="Categorías"&&<Categorias data={data} save={save}/>}
+        {tab==="Dashboard"   && <Dashboard data={data}/>}
+        {tab==="Stock"       && <Stock data={data} save={save}/>}
+        {tab==="Ventas"      && <Ventas data={data} save={save}/>}
+        {tab==="Movimientos" && <Movs data={data} save={save}/>}
+        {tab==="Deudas"      && <Deudas data={data} save={save}/>}
+        {tab==="Gráficos"    && <Graficos data={data}/>}
+        {tab==="Categorías"  && <Categorias data={data} save={save}/>}
       </main>
     </div>
   );
 }
 
+// ── UI HELPERS ──
 function Ttl({children}){return <h2 style={{fontSize:19,fontWeight:600,color:C.bordoD,marginBottom:"1.1rem",marginTop:0}}>{children}</h2>;}
-function Card({title,children,accent}){
-  return <div style={{background:C.white,border:`1px solid ${accent?C.bordoBorder:C.grayB}`,borderRadius:12,padding:"1rem 1.2rem",marginBottom:"1.2rem"}}>
-    {title&&<div style={{fontSize:12,fontWeight:500,color:accent?C.bordo:C.gray,marginBottom:10,textTransform:"uppercase",letterSpacing:".04em"}}>{title}</div>}
-    {children}
-  </div>;
-}
-function KPI({label,value,sub,color,bg}){
-  return <div style={{background:bg||C.grayL,borderRadius:10,padding:"12px 14px"}}>
-    <div style={{fontSize:12,color:C.gray,marginBottom:4}}>{label}</div>
-    <div style={{fontSize:20,fontWeight:600,color:color||C.bordoD}}>{value}</div>
-    {sub&&<div style={{fontSize:11,color:C.gray,marginTop:3}}>{sub}</div>}
-  </div>;
-}
+function Card({title,children,accent}){return <div style={{background:C.white,border:`1px solid ${accent?C.bordoBorder:C.grayB}`,borderRadius:12,padding:"1rem 1.2rem",marginBottom:"1.2rem"}}>{title&&<div style={{fontSize:12,fontWeight:500,color:accent?C.bordo:C.gray,marginBottom:10,textTransform:"uppercase",letterSpacing:".04em"}}>{title}</div>}{children}</div>;}
+function KPI({label,value,sub,color,bg}){return <div style={{background:bg||C.grayL,borderRadius:10,padding:"12px 14px"}}><div style={{fontSize:12,color:C.gray,marginBottom:4}}>{label}</div><div style={{fontSize:20,fontWeight:600,color:color||C.bordoD}}>{value}</div>{sub&&<div style={{fontSize:11,color:C.gray,marginTop:3}}>{sub}</div>}</div>;}
 function Fld({label,children}){return <div><label style={{display:"block",fontSize:12,color:C.gray,marginBottom:4,fontWeight:500}}>{label}</label>{children}</div>;}
-function R2({label,value,color,bold}){
-  return <div style={{display:"flex",justifyContent:"space-between",marginBottom:6,fontSize:13}}>
-    <span style={{color:C.gray}}>{label}</span>
-    <span style={{color:color||"#111",fontWeight:bold?600:400}}>{value}</span>
-  </div>;
-}
+function R2({label,value,color,bold}){return <div style={{display:"flex",justifyContent:"space-between",marginBottom:6,fontSize:13}}><span style={{color:C.gray}}>{label}</span><span style={{color:color||"#111",fontWeight:bold?600:400}}>{value}</span></div>;}
 function Empty({text}){return <div style={{color:C.gray,fontSize:13,padding:"1.2rem 0",textAlign:"center"}}>{text}</div>;}
 function SLbl({children}){return <div style={{marginBottom:8,fontSize:12,fontWeight:500,color:C.gray,textTransform:"uppercase",letterSpacing:".04em"}}>{children}</div>;}
 function TxRow({tx,onDel}){
@@ -143,21 +188,18 @@ function TxRow({tx,onDel}){
     {onDel&&<button style={btnD} onClick={()=>onDel(tx.id)}>×</button>}
   </div>;
 }
-function Toggle({options,value,onChange}){
-  return <div style={{display:"flex",gap:6}}>
-    {options.map(o=><button key={o.v} onClick={()=>onChange(o.v)} style={{flex:1,padding:"8px",borderRadius:8,border:`1px solid ${value===o.v?C.bordo:C.grayB}`,background:value===o.v?C.bordo:C.white,color:value===o.v?C.white:"#444",fontSize:13,cursor:"pointer",fontWeight:value===o.v?500:400}}>{o.l}</button>)}
-  </div>;
-}
+function Toggle({options,value,onChange}){return <div style={{display:"flex",gap:6}}>{options.map(o=><button key={o.v} onClick={()=>onChange(o.v)} style={{flex:1,padding:"8px",borderRadius:8,border:`1px solid ${value===o.v?C.bordo:C.grayB}`,background:value===o.v?C.bordo:C.white,color:value===o.v?C.white:"#444",fontSize:13,cursor:"pointer",fontWeight:value===o.v?500:400}}>{o.l}</button>)}</div>;}
 
+// ── DASHBOARD ──
 function Dashboard({data}){
   const {products,transactions,debts}=data;
   const ingB=transactions.filter(t=>t.type==="ingreso").reduce((s,t)=>s+(t.bruto||t.amount),0);
-  const ing=transactions.filter(t=>t.type==="ingreso").reduce((s,t)=>s+Number(t.amount),0);
-  const egr=transactions.filter(t=>t.type==="egreso").reduce((s,t)=>s+Number(t.amount),0);
-  const vB=transactions.filter(t=>t.category==="Venta").reduce((s,t)=>s+(t.bruto||t.amount),0);
-  const vN=transactions.filter(t=>t.category==="Venta").reduce((s,t)=>s+Number(t.amount),0);
+  const ing =transactions.filter(t=>t.type==="ingreso").reduce((s,t)=>s+Number(t.amount),0);
+  const egr =transactions.filter(t=>t.type==="egreso").reduce((s,t)=>s+Number(t.amount),0);
+  const vB  =transactions.filter(t=>t.category==="Venta").reduce((s,t)=>s+(t.bruto||t.amount),0);
+  const vN  =transactions.filter(t=>t.category==="Venta").reduce((s,t)=>s+Number(t.amount),0);
   const cobrar=debts.filter(d=>d.kind==="cobrar"&&d.status==="pendiente").reduce((s,d)=>s+Number(d.amount),0);
-  const pagar=debts.filter(d=>d.kind==="pagar"&&d.status==="pendiente").reduce((s,d)=>s+Number(d.amount),0);
+  const pagar =debts.filter(d=>d.kind==="pagar"&&d.status==="pendiente").reduce((s,d)=>s+Number(d.amount),0);
   const stockVal=products.reduce((s,p)=>s+p.stock*p.cost,0);
   const bajo=products.filter(p=>p.stock<=(p.minStock||5));
   return <div>
@@ -172,23 +214,23 @@ function Dashboard({data}){
     <SLbl>Ingresos</SLbl>
     <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(140px,1fr))",gap:10,marginBottom:"1.2rem"}}>
       <KPI label="Ingresos brutos" value={`$${fmt(ingB)}`} color={C.bordoD} sub="antes de descuentos"/>
-      <KPI label="Ingresos netos" value={`$${fmt(ing)}`} color={C.success} bg={C.successBg} sub="después de descuentos"/>
-      <KPI label="Descuentos" value={`$${fmt(ingB-ing)}`} color={C.warning} bg={C.warningBg}/>
-      <KPI label="Egresos" value={`$${fmt(egr)}`} color={C.danger} bg={C.dangerBg}/>
+      <KPI label="Ingresos netos"  value={`$${fmt(ing)}`}  color={C.success} bg={C.successBg} sub="después de descuentos"/>
+      <KPI label="Descuentos"      value={`$${fmt(ingB-ing)}`} color={C.warning} bg={C.warningBg}/>
+      <KPI label="Egresos"         value={`$${fmt(egr)}`}  color={C.danger} bg={C.dangerBg}/>
     </div>
     <SLbl>Ventas</SLbl>
     <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(140px,1fr))",gap:10,marginBottom:"1.2rem"}}>
       <KPI label="Ventas brutas" value={`$${fmt(vB)}`} color={C.bordoD} sub="precio lista"/>
-      <KPI label="Ventas netas" value={`$${fmt(vN)}`} color={C.success} bg={C.successBg} sub="con descuentos"/>
+      <KPI label="Ventas netas"  value={`$${fmt(vN)}`} color={C.success} bg={C.successBg} sub="con descuentos"/>
     </div>
     <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(240px,1fr))",gap:12}}>
       <Card title="Flujo de dinero">
         <R2 label="Ing. brutos" value={`$${fmt(ingB)}`} color={C.bordoD}/>
-        <R2 label="Descuentos" value={`-$${fmt(ingB-ing)}`} color={C.warning}/>
-        <R2 label="Ing. netos" value={`$${fmt(ing)}`} color={C.success} bold/>
+        <R2 label="Descuentos"  value={`-$${fmt(ingB-ing)}`} color={C.warning}/>
+        <R2 label="Ing. netos"  value={`$${fmt(ing)}`} color={C.success} bold/>
         <div style={{borderTop:`1px solid ${C.grayB}`,marginTop:7,paddingTop:7}}>
-          <R2 label="Egresos" value={`-$${fmt(egr)}`} color={C.danger}/>
-          <R2 label="Balance" value={`$${fmt(ing-egr)}`} color={(ing-egr)>=0?C.success:C.danger} bold/>
+          <R2 label="Egresos"  value={`-$${fmt(egr)}`} color={C.danger}/>
+          <R2 label="Balance"  value={`$${fmt(ing-egr)}`} color={(ing-egr)>=0?C.success:C.danger} bold/>
         </div>
       </Card>
       <Card title="Top stock">
@@ -202,6 +244,7 @@ function Dashboard({data}){
   </div>;
 }
 
+// ── STOCK ──
 function Stock({data,save}){
   const emp={name:"",cost:"",price:"",stock:"",minStock:"",img:"",link:"",categoria:""};
   const [form,setForm]=useState(emp);
@@ -211,27 +254,19 @@ function Stock({data,save}){
   const [catF,setCatF]=useState("Todas");
   const f=(k,v)=>setForm(p=>({...p,[k]:v}));
   const cats=data.cats?.stock||DEFAULT_DATA.cats.stock;
-
   const submit=()=>{
     if(!form.name.trim()||form.cost===""||form.stock===""){setErr("Completá nombre, costo y cantidad.");return;}
     const prod={id:editId||Date.now(),name:form.name.trim(),cost:Number(form.cost),price:Number(form.price||0),stock:Number(form.stock),minStock:Number(form.minStock||5),sold:editId?(data.products.find(p=>p.id===editId)?.sold||0):0,img:form.img.trim(),link:form.link.trim(),categoria:form.categoria};
     save({...data,products:editId?data.products.map(p=>p.id===editId?prod:p):[...data.products,prod]});
     setForm(emp);setEditId(null);setErr("");
   };
-
   const shown=data.products.filter(p=>p.name.toLowerCase().includes(q.toLowerCase())).filter(p=>catF==="Todas"||(p.categoria||"")===catF);
-
   return <div>
     <Ttl>Stock</Ttl>
     <Card title={editId?"Editar producto":"Nuevo producto"} accent>
       <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(130px,1fr))",gap:10}}>
         <Fld label="Nombre *"><input style={inp} value={form.name} onChange={e=>f("name",e.target.value)} placeholder="Ej: Remera M"/></Fld>
-        <Fld label="Categoría">
-          <select style={inp} value={form.categoria} onChange={e=>f("categoria",e.target.value)}>
-            <option value="">Sin categoría</option>
-            {cats.map(c=><option key={c} value={c}>{c}</option>)}
-          </select>
-        </Fld>
+        <Fld label="Categoría"><select style={inp} value={form.categoria} onChange={e=>f("categoria",e.target.value)}><option value="">Sin categoría</option>{cats.map(c=><option key={c} value={c}>{c}</option>)}</select></Fld>
         <Fld label="Costo *"><input style={inp} type="number" value={form.cost} onChange={e=>f("cost",e.target.value)} placeholder="0.00"/></Fld>
         <Fld label="Precio venta"><input style={inp} type="number" value={form.price} onChange={e=>f("price",e.target.value)} placeholder="0.00"/></Fld>
         <Fld label="Cantidad *"><input style={inp} type="number" value={form.stock} onChange={e=>f("stock",e.target.value)} placeholder="0"/></Fld>
@@ -239,10 +274,7 @@ function Stock({data,save}){
         <Fld label="Foto">
           <div style={{display:"flex",flexDirection:"column",gap:6}}>
             <div style={{display:"flex",gap:6,alignItems:"center"}}>
-              <label style={{padding:"8px 14px",borderRadius:8,border:`1px solid ${C.grayB}`,background:C.white,color:"#444",fontSize:13,cursor:"pointer",whiteSpace:"nowrap"}}>
-                📁 Archivo
-                <input type="file" accept="image/*" style={{display:"none"}} onChange={e=>{const file=e.target.files[0];if(!file)return;const r=new FileReader();r.onload=ev=>f("img",ev.target.result);r.readAsDataURL(file);}}/>
-              </label>
+              <label style={{padding:"8px 14px",borderRadius:8,border:`1px solid ${C.grayB}`,background:C.white,color:"#444",fontSize:13,cursor:"pointer",whiteSpace:"nowrap"}}>📁 Archivo<input type="file" accept="image/*" style={{display:"none"}} onChange={e=>{const file=e.target.files[0];if(!file)return;const r=new FileReader();r.onload=ev=>f("img",ev.target.result);r.readAsDataURL(file);}}/></label>
               {form.img&&<button style={{...btnD,fontSize:12}} onClick={()=>f("img","")}>Quitar</button>}
             </div>
             <input style={inp} value={form.img.startsWith("data:")?"":form.img} onChange={e=>f("img",e.target.value)} placeholder="O pegá una URL (https://...)"/>
@@ -259,18 +291,13 @@ function Stock({data,save}){
     </Card>
     <div style={{display:"flex",gap:10,alignItems:"center",marginBottom:10,flexWrap:"wrap"}}>
       <input style={{...inp,maxWidth:220}} placeholder="Buscar..." value={q} onChange={e=>setQ(e.target.value)}/>
-      <select style={{...inp,maxWidth:160}} value={catF} onChange={e=>setCatF(e.target.value)}>
-        <option value="Todas">Todas las categorías</option>
-        {cats.map(c=><option key={c} value={c}>{c}</option>)}
-      </select>
+      <select style={{...inp,maxWidth:160}} value={catF} onChange={e=>setCatF(e.target.value)}><option value="Todas">Todas las categorías</option>{cats.map(c=><option key={c} value={c}>{c}</option>)}</select>
       <span style={{fontSize:13,color:C.gray}}>{shown.length} producto{shown.length!==1?"s":""}</span>
     </div>
     {shown.length===0?<Empty text="Sin productos."/>:(
       <div style={{overflowX:"auto"}}>
         <table style={{width:"100%",borderCollapse:"collapse",fontSize:13,background:C.white,borderRadius:10,overflow:"hidden"}}>
-          <thead><tr style={{background:C.bordoXL}}>
-            {["","Producto","Cat.","Costo","Precio","Stock","Vendidas","Margen",""].map(h=><th key={h} style={{padding:"9px 11px",textAlign:"left",fontWeight:500,color:C.bordoD,fontSize:12}}>{h}</th>)}
-          </tr></thead>
+          <thead><tr style={{background:C.bordoXL}}>{["","Producto","Cat.","Costo","Precio","Stock","Vendidas","Margen",""].map(h=><th key={h} style={{padding:"9px 11px",textAlign:"left",fontWeight:500,color:C.bordoD,fontSize:12}}>{h}</th>)}</tr></thead>
           <tbody>{shown.map((p,i)=>{
             const mg=p.price>0?((p.price-p.cost)/p.cost*100).toFixed(1):null;
             return <tr key={p.id} style={{borderBottom:`1px solid ${C.grayL}`,background:i%2===0?C.white:C.offwhite}}>
@@ -294,6 +321,7 @@ function Stock({data,save}){
   </div>;
 }
 
+// ── VENTAS ──
 function Ventas({data,save}){
   const [form,setForm]=useState({productId:"",qty:"",price:"",descuento:"",date:today(),note:""});
   const [err,setErr]=useState("");
@@ -302,7 +330,6 @@ function Ventas({data,save}){
   const bruto=Number(form.price||sel2?.price||0)*Number(form.qty||0);
   const desc=Number(form.descuento||0);
   const neto=bruto-desc;
-
   const submit=()=>{
     if(!form.productId||!form.qty){setErr("Seleccioná producto y cantidad.");return;}
     const qty=Number(form.qty);
@@ -315,21 +342,12 @@ function Ventas({data,save}){
     save({...data,products,transactions:tx});
     setForm({productId:"",qty:"",price:"",descuento:"",date:today(),note:""});setErr("");
   };
-
   return <div>
     <Ttl>Ventas</Ttl>
     <Card title="Nueva venta" accent>
       <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(140px,1fr))",gap:10}}>
-        <Fld label="Producto *">
-          <select style={inp} value={form.productId} onChange={e=>{const p=data.products.find(x=>x.id===Number(e.target.value));f("productId",e.target.value);if(p)f("price",p.price||"");}}>
-            <option value="">Seleccionar...</option>
-            {data.products.filter(p=>p.stock>0).map(p=><option key={p.id} value={p.id}>{p.name} (stock: {fmtI(p.stock)})</option>)}
-          </select>
-        </Fld>
-        <Fld label="Cantidad *">
-          <input style={inp} type="number" min="1" value={form.qty} onChange={e=>f("qty",e.target.value)} placeholder="0"/>
-          {sel2&&<div style={{fontSize:12,color:C.gray,marginTop:3}}>Disponible: {fmtI(sel2.stock)}</div>}
-        </Fld>
+        <Fld label="Producto *"><select style={inp} value={form.productId} onChange={e=>{const p=data.products.find(x=>x.id===Number(e.target.value));f("productId",e.target.value);if(p)f("price",p.price||"");}}><option value="">Seleccionar...</option>{data.products.filter(p=>p.stock>0).map(p=><option key={p.id} value={p.id}>{p.name} (stock: {fmtI(p.stock)})</option>)}</select></Fld>
+        <Fld label="Cantidad *"><input style={inp} type="number" min="1" value={form.qty} onChange={e=>f("qty",e.target.value)} placeholder="0"/>{sel2&&<div style={{fontSize:12,color:C.gray,marginTop:3}}>Disponible: {fmtI(sel2.stock)}</div>}</Fld>
         <Fld label="Precio unitario"><input style={inp} type="number" value={form.price} onChange={e=>f("price",e.target.value)} placeholder="0.00"/></Fld>
         <Fld label="Descuento ($)"><input style={inp} type="number" value={form.descuento} onChange={e=>f("descuento",e.target.value)} placeholder="0.00"/></Fld>
         <Fld label="Fecha"><input style={inp} type="date" value={form.date} onChange={e=>f("date",e.target.value)}/></Fld>
@@ -348,6 +366,7 @@ function Ventas({data,save}){
   </div>;
 }
 
+// ── MOVIMIENTOS ──
 function Movs({data,save}){
   const cats=data.cats||DEFAULT_DATA.cats;
   const [form,setForm]=useState({type:"ingreso",amount:"",bruto:"",descuento:"",category:"",desc:"",date:today()});
@@ -362,16 +381,16 @@ function Movs({data,save}){
   };
   const del=id=>save({...data,transactions:data.transactions.filter(t=>t.id!==id)});
   const ingB=data.transactions.filter(t=>t.type==="ingreso").reduce((s,t)=>s+(t.bruto||t.amount),0);
-  const ing=data.transactions.filter(t=>t.type==="ingreso").reduce((s,t)=>s+Number(t.amount),0);
-  const egr=data.transactions.filter(t=>t.type==="egreso").reduce((s,t)=>s+Number(t.amount),0);
+  const ing =data.transactions.filter(t=>t.type==="ingreso").reduce((s,t)=>s+Number(t.amount),0);
+  const egr =data.transactions.filter(t=>t.type==="egreso").reduce((s,t)=>s+Number(t.amount),0);
   const shown=[...data.transactions].reverse().filter(t=>filt==="todos"||t.type===filt);
   return <div>
     <Ttl>Movimientos</Ttl>
     <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(120px,1fr))",gap:10,marginBottom:"1.1rem"}}>
       <KPI label="Ing. brutos" value={`$${fmt(ingB)}`} color={C.bordoD} sub="antes de desc."/>
-      <KPI label="Ing. netos" value={`$${fmt(ing)}`} color={C.success} bg={C.successBg} sub="después de desc."/>
-      <KPI label="Egresos" value={`$${fmt(egr)}`} color={C.danger} bg={C.dangerBg}/>
-      <KPI label="Balance" value={`$${fmt(ing-egr)}`} color={(ing-egr)>=0?C.success:C.danger} bg={(ing-egr)>=0?C.successBg:C.dangerBg}/>
+      <KPI label="Ing. netos"  value={`$${fmt(ing)}`}  color={C.success} bg={C.successBg} sub="después de desc."/>
+      <KPI label="Egresos"     value={`$${fmt(egr)}`}  color={C.danger}  bg={C.dangerBg}/>
+      <KPI label="Balance"     value={`$${fmt(ing-egr)}`} color={(ing-egr)>=0?C.success:C.danger} bg={(ing-egr)>=0?C.successBg:C.dangerBg}/>
     </div>
     <Card title="Registrar movimiento" accent>
       <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(130px,1fr))",gap:10}}>
@@ -379,12 +398,7 @@ function Movs({data,save}){
         {form.type==="ingreso"&&<Fld label="Monto bruto"><input style={inp} type="number" value={form.bruto} onChange={e=>f("bruto",e.target.value)} placeholder="0.00"/></Fld>}
         {form.type==="ingreso"&&<Fld label="Descuento ($)"><input style={inp} type="number" value={form.descuento} onChange={e=>f("descuento",e.target.value)} placeholder="0.00"/></Fld>}
         <Fld label={form.type==="ingreso"?"Monto neto *":"Monto *"}><input style={inp} type="number" value={form.amount} onChange={e=>f("amount",e.target.value)} placeholder="0.00"/></Fld>
-        <Fld label="Categoría *">
-          <select style={inp} value={form.category} onChange={e=>f("category",e.target.value)}>
-            <option value="">Seleccionar...</option>
-            {(cats[form.type]||[]).map(c=><option key={c} value={c}>{c}</option>)}
-          </select>
-        </Fld>
+        <Fld label="Categoría *"><select style={inp} value={form.category} onChange={e=>f("category",e.target.value)}><option value="">Seleccionar...</option>{(cats[form.type]||[]).map(c=><option key={c} value={c}>{c}</option>)}</select></Fld>
         <Fld label="Descripción"><input style={inp} value={form.desc} onChange={e=>f("desc",e.target.value)} placeholder="Detalle..."/></Fld>
         <Fld label="Fecha"><input style={inp} type="date" value={form.date} onChange={e=>f("date",e.target.value)}/></Fld>
       </div>
@@ -398,6 +412,7 @@ function Movs({data,save}){
   </div>;
 }
 
+// ── DEUDAS ──
 function Deudas({data,save}){
   const [form,setForm]=useState({kind:"cobrar",who:"",amount:"",desc:"",date:today(),due:""});
   const [err,setErr]=useState("");
@@ -448,16 +463,13 @@ function Deudas({data,save}){
   </div>;
 }
 
+// ── CATEGORÍAS ──
 function Categorias({data,save}){
   const cats=data.cats||DEFAULT_DATA.cats;
   const [tab,setTab]=useState("ingreso");
   const [nueva,setNueva]=useState("");
   const [err,setErr]=useState("");
-  const TIPOS=[
-    {v:"ingreso",l:"Ingresos",color:C.success,bg:C.successBg,border:"#B6DFC9"},
-    {v:"egreso",l:"Egresos",color:C.danger,bg:C.dangerBg,border:"#FBCDD0"},
-    {v:"stock",l:"Stock",color:C.bordo,bg:C.bordoXL,border:C.bordoBorder},
-  ];
+  const TIPOS=[{v:"ingreso",l:"Ingresos",color:C.success,bg:C.successBg,border:"#B6DFC9"},{v:"egreso",l:"Egresos",color:C.danger,bg:C.dangerBg,border:"#FBCDD0"},{v:"stock",l:"Stock",color:C.bordo,bg:C.bordoXL,border:C.bordoBorder}];
   const agregar=()=>{
     const n=nueva.trim();
     if(!n){setErr("Escribí un nombre.");return;}
@@ -474,16 +486,8 @@ function Categorias({data,save}){
     <Ttl>Categorías</Ttl>
     <Card title="Nueva categoría" accent>
       <div style={{display:"flex",gap:10,alignItems:"flex-end",flexWrap:"wrap"}}>
-        <div style={{minWidth:240}}>
-          <Fld label="Tipo">
-            <div style={{display:"flex",gap:6}}>
-              {TIPOS.map(t=><button key={t.v} onClick={()=>{setTab(t.v);setErr("");}} style={{flex:1,padding:"8px 6px",borderRadius:8,border:`1px solid ${tab===t.v?C.bordo:C.grayB}`,background:tab===t.v?C.bordo:C.white,color:tab===t.v?C.white:"#444",fontSize:13,cursor:"pointer",fontWeight:tab===t.v?500:400}}>{t.l}</button>)}
-            </div>
-          </Fld>
-        </div>
-        <div style={{flex:1,minWidth:160}}>
-          <Fld label="Nombre"><input style={inp} value={nueva} onChange={e=>setNueva(e.target.value)} placeholder="Nueva categoría..." onKeyDown={e=>e.key==="Enter"&&agregar()}/></Fld>
-        </div>
+        <div style={{minWidth:240}}><Fld label="Tipo"><div style={{display:"flex",gap:6}}>{TIPOS.map(t=><button key={t.v} onClick={()=>{setTab(t.v);setErr("");}} style={{flex:1,padding:"8px 6px",borderRadius:8,border:`1px solid ${tab===t.v?C.bordo:C.grayB}`,background:tab===t.v?C.bordo:C.white,color:tab===t.v?C.white:"#444",fontSize:13,cursor:"pointer",fontWeight:tab===t.v?500:400}}>{t.l}</button>)}</div></Fld></div>
+        <div style={{flex:1,minWidth:160}}><Fld label="Nombre"><input style={inp} value={nueva} onChange={e=>setNueva(e.target.value)} placeholder="Nueva categoría..." onKeyDown={e=>e.key==="Enter"&&agregar()}/></Fld></div>
         <button style={btnP} onClick={agregar}>Agregar</button>
       </div>
       {err&&<div style={{color:C.danger,fontSize:13,marginTop:7}}>{err}</div>}
@@ -505,11 +509,12 @@ function Categorias({data,save}){
   </div>;
 }
 
+// ── GRÁFICOS ──
 function Graficos({data}){
   const {transactions,products}=data;
-  const ing=transactions.filter(t=>t.type==="ingreso").reduce((s,t)=>s+t.amount,0);
+  const ing =transactions.filter(t=>t.type==="ingreso").reduce((s,t)=>s+t.amount,0);
   const ingB=transactions.filter(t=>t.type==="ingreso").reduce((s,t)=>s+(t.bruto||t.amount),0);
-  const egr=transactions.filter(t=>t.type==="egreso").reduce((s,t)=>s+t.amount,0);
+  const egr =transactions.filter(t=>t.type==="egreso").reduce((s,t)=>s+t.amount,0);
   const cats={};
   transactions.filter(t=>t.type==="egreso").forEach(t=>{cats[t.category]=(cats[t.category]||0)+t.amount;});
   const catArr=Object.entries(cats).sort((a,b)=>b[1]-a[1]).slice(0,6);
@@ -530,22 +535,16 @@ function Graficos({data}){
         </svg>
       </Card>
       <Card title="Egresos por categoría">
-        {catArr.length===0?<Empty text="Sin egresos."/>:<svg viewBox={`0 0 260 ${catArr.length*38+10}`} style={{width:"100%"}}>
-          {catArr.map(([cat,val],i)=>{const bw=(val/maxCat)*180;return <g key={cat}><text x="0" y={18+i*38} style={{fontSize:11,fill:C.gray}}>{cat.length>16?cat.slice(0,16)+"…":cat}</text><rect x="0" y={24+i*38} width={bw||2} height={14} rx="3" fill={colors[i%colors.length]}/><text x={bw+5} y={35+i*38} style={{fontSize:11,fill:C.bordoD}}>${fmt(val)}</text></g>;})}
-        </svg>}
+        {catArr.length===0?<Empty text="Sin egresos."/>:<svg viewBox={`0 0 260 ${catArr.length*38+10}`} style={{width:"100%"}}>{catArr.map(([cat,val],i)=>{const bw=(val/maxCat)*180;return <g key={cat}><text x="0" y={18+i*38} style={{fontSize:11,fill:C.gray}}>{cat.length>16?cat.slice(0,16)+"…":cat}</text><rect x="0" y={24+i*38} width={bw||2} height={14} rx="3" fill={colors[i%colors.length]}/><text x={bw+5} y={35+i*38} style={{fontSize:11,fill:C.bordoD}}>${fmt(val)}</text></g>;})} </svg>}
       </Card>
       <Card title="Productos más vendidos">
-        {topP.length===0?<Empty text="Sin ventas."/>:<svg viewBox={`0 0 260 ${topP.length*38+10}`} style={{width:"100%"}}>
-          {topP.map((p,i)=>{const bw=((p.sold||0)/maxSold)*180;return <g key={p.id}><text x="0" y={18+i*38} style={{fontSize:11,fill:C.gray}}>{p.name.length>16?p.name.slice(0,16)+"…":p.name}</text><rect x="0" y={24+i*38} width={bw||2} height={14} rx="3" fill={colors[i%colors.length]}/><text x={bw+5} y={35+i*38} style={{fontSize:11,fill:C.bordoD}}>{fmtI(p.sold||0)} u</text></g>;})}
-        </svg>}
+        {topP.length===0?<Empty text="Sin ventas."/>:<svg viewBox={`0 0 260 ${topP.length*38+10}`} style={{width:"100%"}}>{topP.map((p,i)=>{const bw=((p.sold||0)/maxSold)*180;return <g key={p.id}><text x="0" y={18+i*38} style={{fontSize:11,fill:C.gray}}>{p.name.length>16?p.name.slice(0,16)+"…":p.name}</text><rect x="0" y={24+i*38} width={bw||2} height={14} rx="3" fill={colors[i%colors.length]}/><text x={bw+5} y={35+i*38} style={{fontSize:11,fill:C.bordoD}}>{fmtI(p.sold||0)} u</text></g>;})}</svg>}
       </Card>
       <Card title="Stock disponible">
         {products.length===0?<Empty text="Sin productos."/>:(()=>{
           const sorted=products.slice().sort((a,b)=>b.stock-a.stock).slice(0,8);
           const maxS=Math.max(...sorted.map(p=>p.stock),1);
-          return <svg viewBox={`0 0 260 ${sorted.length*38+10}`} style={{width:"100%"}}>
-            {sorted.map((p,i)=>{const bw=(p.stock/maxS)*180;const bajo=p.stock<=(p.minStock||5);return <g key={p.id}><text x="0" y={18+i*38} style={{fontSize:11,fill:C.gray}}>{p.name.length>16?p.name.slice(0,16)+"…":p.name}</text><rect x="0" y={24+i*38} width={bw||2} height={14} rx="3" fill={bajo?C.danger:C.success}/><text x={bw+5} y={35+i*38} style={{fontSize:11,fill:bajo?C.danger:C.success}}>{fmtI(p.stock)} u</text></g>;})}
-          </svg>;
+          return <svg viewBox={`0 0 260 ${sorted.length*38+10}`} style={{width:"100%"}}>{sorted.map((p,i)=>{const bw=(p.stock/maxS)*180;const bajo=p.stock<=(p.minStock||5);return <g key={p.id}><text x="0" y={18+i*38} style={{fontSize:11,fill:C.gray}}>{p.name.length>16?p.name.slice(0,16)+"…":p.name}</text><rect x="0" y={24+i*38} width={bw||2} height={14} rx="3" fill={bajo?C.danger:C.success}/><text x={bw+5} y={35+i*38} style={{fontSize:11,fill:bajo?C.danger:C.success}}>{fmtI(p.stock)} u</text></g>;})}</svg>;
         })()}
       </Card>
     </div>
